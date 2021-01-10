@@ -1,0 +1,18 @@
+$ /quote INC 2
+$ /quote ZERO 5
+$ /quote /set 5 3
+$ /quote INC 1
+$ /quote INC 1
+$ /quote ZERO 3
+$ /code
+INC 2
+ZERO 5
+/set 5 3
+INC 1
+INC 1
+ZERO 3
+$ /quote INC 1
+$ /quote INC 1
+$ /quote INC 10
+$ /quote ZERO 4
+$ /quote JUMP 7 11 12
