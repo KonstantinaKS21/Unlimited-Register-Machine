@@ -1,6 +1,6 @@
 ﻿#include <iostream>
 #include <vector>
-#include <list>
+#include <string>
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -40,11 +40,10 @@ public:
 
 class Instruction: public Operator
 {
-protected:
-	unsigned index; //пореден номер
-	static unsigned indexOfLast; //когато конструираме нова инструкция да вземем този номер, за да знаем какъв ѝ е индексът
-
 public:
+	unsigned index; //пореден номер
+	static unsigned indexOfLast; 
+
 	Instruction() : index(indexOfLast) { indexOfLast++; }
 	unsigned getIndex() {
 		return index;
@@ -64,7 +63,7 @@ public:
 
 	vector<Operator*> operators;
 	int currentOperatorIndex{ 0 };
-	string filename;
+	
 
 	void run();
 	void parseCommands(vector<string>& line, bool toLoad = true);
@@ -294,9 +293,7 @@ public:
 	}
 
 	void execute() override {
-		for (int i = 0; i < machine->operators.size(); ++i) {
-			machine->operators[i]->execute();
-		}
+		machine->run();
 	}
 
 	string toString() override {
@@ -317,11 +314,11 @@ void splitString(vector<string>& result, string& inputStr, char delim)
 }
 
 
-vector<string> split_string(string& input_str, char delim) //all chars from ss into str until delim
+vector<string> split_string(string& input_str, char delim) 
 {
 	vector<string> result;
 	stringstream ss(input_str);
-	string str; //empty str; push into vector
+	string str; 
 	while (getline(ss, str, delim))
 	{
 		result.push_back(str);
@@ -349,6 +346,53 @@ void checkLength(vector<string>& line, int len)
 	}
 }
 
+
+void mergeInstructions(Machine* oldM, Machine* newM) {
+	//обхождаме новата машина, за да видим колко инструкции има
+	int instructionsCounter = 0;
+	for (auto i : newM->operators) {
+		Instruction* current = dynamic_cast<Instruction*>(i);
+		if (current != nullptr) instructionsCounter++;
+	}
+
+	//отместваме индекса на всяка инструкция в старата машина с горнополученото число
+	for (auto i : oldM->operators) {
+		Instruction* current = dynamic_cast<Instruction*>(i);
+		//ако не се кастне до типа instruction*, ще върне nullptr
+		if (current != nullptr) current->index += instructionsCounter;
+	}
+
+	//добавяме инструкциите от новата в старата най-отпред
+	vector<Operator*> newOperators{ newM->operators };
+	
+	for (auto i : oldM->operators) {
+		newOperators.push_back(i);
+	}
+}
+
+
+void mergeMachines(Machine* oldM, Machine* newM) {
+	int newMSize = newM->registry.rbegin()->first;
+	//отместваме регистъра на стария мап
+	map<int, int>::reverse_iterator reverseIt;
+
+	for (reverseIt = oldM->registry.rbegin(); reverseIt != oldM->registry.rend(); ++reverseIt) {
+		int registryKey = reverseIt->first;
+		int registryValue = reverseIt->second;
+		oldM->registry.erase(registryKey);
+		oldM->registry.insert({ registryKey + newMSize, registryValue });
+	}
+
+	//добавяме регистъра на новия мап
+	for (auto i : newM->registry) {
+		oldM->registry.insert({ i.first, i.second });
+	}
+
+	mergeInstructions(oldM, newM);
+}
+
+
+
 //Machine methods
 void Machine::run() {
 	currentOperatorIndex = 0;
@@ -361,7 +405,6 @@ void Machine::run() {
 void Machine::erase() {
 	operators.clear();
 	registry.clear();
-	filename.clear();
 }
 
 void Machine::loadOrExecute(Operator* op, bool toLoad) {
@@ -373,7 +416,7 @@ void Machine::loadOrExecute(Operator* op, bool toLoad) {
 	}
 }
 
-//Shoud've been Command Design Pattern, but well...
+
 void Machine::parseCommands(vector<string>& line, bool toLoad) {
 	if (line[0] == "ZERO") {
 		checkLength(line, 2);
@@ -447,7 +490,10 @@ void Machine::parseCommands(vector<string>& line, bool toLoad) {
 
 	else if (line[0] == "/add") {
 		checkLength(line, 2);
-		readFile(line[1], this);
+		Machine* newMachine = new Machine();
+		readFile(line[1], newMachine);
+		mergeMachines(this, newMachine);
+		delete newMachine;
 	}
 
 	else if (line[0] == "/quote") {
@@ -469,9 +515,9 @@ void Machine::parseCommands(vector<string>& line, bool toLoad) {
 
 int main() {
 	Machine* machine = new Machine();
-	readFile("test1.urm", machine);
+	readFile("test.urm", machine);
 	string input;
-	machine->run();
+
 	while (input != "/exit") {
 		cout << "$ ";
 		getline(cin, input);
@@ -483,19 +529,3 @@ int main() {
 	return 0;
 }
 
-/*
-ins 0
-ins 1
-com
-ins 2
-com
-com
-ins 3
-com
-ins 4 - > JUMP 1 2 1 [0, 1, 1, 0.....]
-ins 5
-
-Operator* -> Instruction*
-	|
-	Command*
-*/
