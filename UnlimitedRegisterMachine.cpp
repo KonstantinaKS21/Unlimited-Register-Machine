@@ -8,7 +8,6 @@ using namespace std;
 
 class Machine;
 
-
 class InvalidCommandException: exception
 {
 private:
@@ -27,14 +26,13 @@ public:
 //		   -> ZeroCommand, SetCommand, CopyCommand, ...
 class Operator
 {
-	friend class Machine;
-
 protected:
 	Machine* machine{ nullptr };
 
 public:
 	virtual void execute() = 0;
 	virtual string toString() = 0;
+	virtual ~Operator() {}
 };
 
 
@@ -48,13 +46,14 @@ public:
 	unsigned getIndex() {
 		return index;
 	}
+
+	virtual ~Instruction() {}
 };
 unsigned Instruction::indexOfLast{ 0 };
 
 
 class Machine
 {
-	friend class Instruction;
 private:
 	void loadOrExecute(Operator* op, bool toLoad);
 
@@ -63,8 +62,15 @@ public:
 
 	vector<Operator*> operators;
 	int currentOperatorIndex{ 0 };
-	
 
+	~Machine() {
+		//registry manages its own memory
+		for (auto i : operators)
+		{
+			delete i;
+		}
+	}
+	
 	void run();
 	void parseCommands(vector<string>& line, bool toLoad = true);
 	void erase();
@@ -159,8 +165,10 @@ public:
 			int currentIndex = index;
 			while (currentIndex != indexToJump) {
 				Instruction* current = dynamic_cast<Instruction*>(machine->operators[currentIndex]);
-				if (current != nullptr && current->getIndex() == indexToJump) {
-					machine->currentOperatorIndex = indexToJump - 1;
+				if (current != nullptr) {
+					if (current->getIndex() == indexToJump) {
+						machine->currentOperatorIndex = indexToJump - 1;
+					}
 				}
 				else {
 					currentIndex += step;
@@ -304,17 +312,7 @@ public:
 
 
 //Helper functions
-void splitString(vector<string>& result, string& inputStr, char delim) 
-{
-	stringstream ss(inputStr);
-	string str;
-	while (getline(ss, str, delim)) {
-		result.push_back(str);
-	}
-}
-
-
-vector<string> split_string(string& input_str, char delim) 
+vector<string> splitString(string& input_str, char delim) 
 {
 	vector<string> result;
 	stringstream ss(input_str);
@@ -333,7 +331,7 @@ void readFile(string filename, Machine* machine)
 	string lineStr;
 	while (getline(in, lineStr)) {
 		cout << lineStr << endl;
-		vector<string> line = split_string(lineStr, ' ');
+		vector<string> line = splitString(lineStr, ' ');
 		machine->parseCommands(line, true);
 	}
 	in.close();
@@ -433,16 +431,16 @@ void Machine::parseCommands(vector<string>& line, bool toLoad) {
 		loadOrExecute(new MOVE(this, x, y), toLoad);
 	}
 	else if (line[0] == "JUMP") {
-		checkLength(line, 2);
-		unsigned x = stoi(line[1]);
-
 		//JUMP с 1 аргумент
 		if (line.size() == 2)
 		{
-			loadOrExecute(new JUMP(this, x, 0, 0), toLoad);
+			unsigned z = stoi(line[1]);
+			loadOrExecute(new JUMP(this, 0, 0, z), toLoad);
 		}
+		//JUMP с 3 аргумента
 		else {
 			checkLength(line, 4);
+			unsigned x = stoi(line[1]);
 			unsigned y = stoi(line[2]);
 			unsigned z = stoi(line[3]);
 			loadOrExecute(new JUMP(this, x, y, z), toLoad);
@@ -507,6 +505,8 @@ void Machine::parseCommands(vector<string>& line, bool toLoad) {
 
 	else if (line[0] == "/comment") {}
 
+	else if (line[0] == "/exit") return;
+
 	else throw new InvalidCommandException("Invalid command!");
 }
 
@@ -521,8 +521,7 @@ int main() {
 	while (input != "/exit") {
 		cout << "$ ";
 		getline(cin, input);
-		vector<string> consoleLine;
-		splitString(consoleLine, input, ' ');
+		vector<string> consoleLine = splitString(input, ' ');
 		machine->parseCommands(consoleLine, false);
 	}
 	delete machine;
